@@ -493,6 +493,7 @@ async function vistaConfig() {
       ${campo("Reintentos por pedido", "limites.api_reintentos", s.limites.api_reintentos, "number")}
       ${campo("Base de la espera creciente (s)", "limites.api_backoff_base_s", s.limites.api_backoff_base_s, "number", 'step="any"')}
       ${campo("Leer el Sheet automáticamente cada (min, 0 = no)", "limites.sync_automatico_min", s.limites.sync_automatico_min, "number")}
+      ${campo("Formatos que genera el motor 3 con la API (coma)", "motor3_formatos", s.motor3_formatos.join(", "))}
       <label class="toggle-label"><span class="toggle"><input type="checkbox" data-path="limites.solo_fechas_desde_hoy" ${s.limites.solo_fechas_desde_hoy ? "checked" : ""}><span></span></span>Solo filas con fecha de hoy en adelante</label></div>`;
   if (sec === "ritmo") { const r = s.ritmo_humano; cuerpo = `<p class="muted">Se aplica a los motores de navegador (Gemini web, ChatGPT web).</p><div class="form-grid">
       ${rango("Espera al cargar (s)", "ritmo_humano.espera_carga_s", r.espera_carga_s)}
@@ -522,6 +523,7 @@ async function vistaConfig() {
       const last = keys[keys.length - 1];
       let v = el.type === "checkbox" ? el.checked : el.value;
       if (el.type === "number") v = v === "" ? 0 : Number(v);
+      if (el.dataset.path === "motor3_formatos") v = String(v).split(",").map((x) => x.trim()).filter(Boolean);
       if (el.dataset.path === "ritmo_humano.franjas") v = String(v).split(",").map((x) => x.trim()).filter(Boolean);
       o[last] = v;
     });

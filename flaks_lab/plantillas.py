@@ -95,3 +95,27 @@ def _descargar_drive(file_id: str, dest_dir: Path, settings: dict) -> Path:
     dest = dest_dir / f"{file_id}{ext}"
     dest.write_bytes(buf.getvalue())
     return dest
+
+
+def imagen_plantilla(plantilla: Plantilla, formato: str = "4x5") -> Path:
+    """Imagen de la plantilla para los motores de imagen (3 y 5).
+
+    Usa /plantillas/{cliente}/plantilla.png si existe; si no, renderiza la plantilla HTML con un texto de muestra
+    (se guarda en data/plantillas_generadas/ para no pisar tus archivos).
+    """
+    if plantilla.imagen:
+        return plantilla.imagen
+    if not plantilla.html:
+        raise FileNotFoundError(f"No hay plantilla.png ni plantilla.html para {plantilla.cliente}")
+    from . import render
+
+    dest_dir = config.DATA_DIR / "plantillas_generadas" / plantilla.cliente
+    dest = dest_dir / formato / "slide-01.png"
+    fuente = max(plantilla.html.stat().st_mtime, (plantilla.carpeta / "brand.json").stat().st_mtime
+                 if (plantilla.carpeta / "brand.json").exists() else 0)
+    if dest.exists() and dest.stat().st_mtime >= fuente:
+        return dest
+    muestra = [{"numero": 1, "total": 5, "tipo": "portada", "etiqueta": "Etiqueta",
+                "titulo": "Título de *ejemplo* del slide", "texto": "Texto de apoyo de una o dos líneas.", "cta": ""}]
+    render.renderizar(plantilla.html, muestra, plantilla.brand, dest_dir, (formato,))
+    return dest

@@ -163,3 +163,62 @@ def test_motor2_rechazo_queda_como_error(orq, monkeypatch):
     _real("claude_html")
     job = _correr(orq, "claude_html")
     assert job["status"] == "error" and "declinó" in job["error"]
+
+
+class FakeImagenes:
+    def __init__(self):
+        self.pedidos = []
+        self.images = SimpleNamespace(edit=self._edit)
+
+    def _edit(self, **kw):
+        import base64
+        import io
+
+        self.pedidos.append({**kw, "image": [f.name for f in kw["image"]]})
+        w, h = map(int, kw["size"].split("x"))
+        buf = io.BytesIO()
+        Image.new("RGB", (w, h), "#191035").save(buf, "PNG")
+        usage = SimpleNamespace(input_tokens=1500, output_tokens=4000,
+                                input_tokens_details=SimpleNamespace(image_tokens=1200, text_tokens=300))
+        return SimpleNamespace(data=[SimpleNamespace(b64_json=base64.b64encode(buf.getvalue()).decode())], usage=usage)
+
+
+@necesita_chromium
+def test_motor3_gpt_imagen(orq, monkeypatch):
+    fake = FakeImagenes()
+    monkeypatch.setattr(proveedores, "cliente_openai", lambda s: fake)
+    _real("gpt_imagen")
+    job = _correr(orq, "gpt_imagen")
+    assert job["status"] == "listo", job["error"]
+    d = config.OUTPUT_DIR / job["output_dir"]
+    for fmt, size in (("4x5", (1080, 1350)), ("9x16", (1080, 1920)), ("1x1", (1080, 1080))):
+        assert Image.open(d / fmt / "slide-05.png").size == size
+    assert (d / "pdf" / "carrusel-linkedin.pdf").exists()
+    assert len(fake.pedidos) == 15  # 5 slides x 3 formatos
+    p = fake.pedidos[0]
+    assert p["image"][0].endswith("slide-01.png")  # plantilla generada desde el HTML
+    assert "5 errores que frenan tu marketing" in p["prompt"]
+    meta = json.loads((d / "meta.json").read_text())
+    u = meta["uso"][0]
+    assert u["imagenes"] == 15 and u["image_input_tokens"] == 15 * 1200 and u["input_tokens"] == 15 * 300
+    esperado = (15 * 300 * 5.0 + 15 * 1200 * 8.0 + 15 * 4000 * 30.0) / 1e6
+    assert abs(meta["costo_usd"] - esperado) < 1e-9
+
+
+def test_motor3_solo_4x5_reexporta_el_resto(orq, monkeypatch):
+    fake = FakeImagenes()
+    monkeypatch.setattr(proveedores, "cliente_openai", lambda s: fake)
+    s = _real("gpt_imagen")
+    s["motor3_formatos"] = ["4x5"]
+    db.save_settings(s)
+    (config.TEMPLATES_DIR / "flaks" / "plantilla.png").write_bytes(
+        (config.REFERENCES_DIR / "flaks" / "ejemplo-carrusel.png").read_bytes())
+    try:
+        job = _correr(orq, "gpt_imagen")
+    finally:
+        (config.TEMPLATES_DIR / "flaks" / "plantilla.png").unlink()
+    assert job["status"] == "listo", job["error"]
+    assert len(fake.pedidos) == 5
+    assert fake.pedidos[0]["image"][0].endswith("plantilla.png")
+    meta = json.loads((config.OUTPUT_DIR / job["output_dir"] / "meta.json").read_text())
+    assert set(meta["reexportados"]) == {"9x16", "1x1"}

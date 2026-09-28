@@ -45,6 +45,8 @@ DEFAULT_SETTINGS: dict = {
     # Multiplica las esperas en modo simulado (0.01 = 100 veces más rápido).
     "simulacion_escala_tiempo": 0.01,
     "simulacion_tasa_error": 0.08,
+    # Formatos que el motor 3 genera con la API (cada uno cuesta una imagen por slide); el resto se reexporta.
+    "motor3_formatos": ["4x5", "9x16", "1x1"],
     "modelos": {
         "openai_texto": "gpt-5.4-mini",
         "openai_imagen": "gpt-image-2",

@@ -450,6 +450,7 @@ class Orquestador:
         db.update_job(job["id"], step="Exportando formatos")
         if not res.archivos.get("4x5"):
             raise RuntimeError("El motor no devolvió slides 4:5")
+        nativos = list(res.archivos)
         faltantes = [f for f in config.FORMATS if f not in res.archivos]
         res.archivos.update(formats.reexportar(res.archivos["4x5"], out_dir, faltantes))
         reel = formats.exportar_reel(res.archivos.get("9x16", []), out_dir / "9x16" / "reel.mp4")
@@ -462,7 +463,7 @@ class Orquestador:
         formatos = {f: [storage.rel(p) for p in ps] for f, ps in res.archivos.items()}
         meta = self._meta_base(job, motor, pieza, settings, simulado)
         meta.update({
-            "estado": "listo", "formatos": formatos, "nativos": [f for f in motor.formatos_nativos],
+            "estado": "listo", "formatos": formatos, "nativos": nativos,
             "reexportados": faltantes, "reel_mp4": storage.rel(reel) if reel else None,
             "textos": res.textos, "uso": usos, "costo_usd": costo, "duracion_s": round(dur, 1),
             "notas": res.notas, "extra": _serializable(res.extra),

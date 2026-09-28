@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flaks Content Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="logo">
+      <span class="logo-mark">F</span>
+      <div><strong>Flaks</strong><small>Content Lab</small></div>
+    </div>
+    <nav>
+      <a href="#/dashboard" data-route="dashboard"><span class="ic">▦</span>Dashboard</a>
+      <a href="#/contenido" data-route="contenido"><span class="ic">▣</span>Contenido finalizado</a>
+      <a href="#/motores" data-route="motores"><span class="ic">⚙</span>Motores</a>
+      <a href="#/historial" data-route="historial"><span class="ic">☰</span>Historial</a>
+      <a href="#/configuracion" data-route="configuracion"><span class="ic">✎</span>Configuración</a>
+    </nav>
+    <div class="sidebar-foot">
+      <span class="dot-live"></span> Local · <span id="reloj"></span>
+    </div>
+  </aside>
+  <main id="app" class="main"></main>
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true"></div>
+  <div id="toast" class="toast hidden"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

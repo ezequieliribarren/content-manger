@@ -1,0 +1,85 @@
+{
+ "Flaks": [
+  [
+   "Fecha",
+   "Contenido Slide 1",
+   "Contenido Slide 2",
+   "Contenido Slide 3",
+   "Contenido Slide 4",
+   "Contenido Slide 5",
+   "Referencia",
+   "Qué tomar"
+  ],
+  [
+   "28/09/2026",
+   "5 errores que frenan tu marketing",
+   "Publicar sin objetivo: cada post tiene que mover una métrica",
+   "No medir: si no lo medís, no lo podés mejorar",
+   "Copiar a la competencia en vez de escuchar a tu cliente",
+   "Abandonar a las 3 semanas: la constancia gana",
+   "¿Cuál te pasa? Escribinos y lo resolvemos juntos",
+   "",
+   ""
+  ],
+  [
+   "29/09/2026",
+   "Cómo armamos un calendario de contenido en 1 hora",
+   "Paso 1: definí 3 pilares de contenido",
+   "Paso 2: una idea por pilar por semana",
+   "Paso 3: reciclá lo que ya funcionó",
+   "Guardalo para tu próxima planificación",
+   "",
+   "ejemplo-carrusel.png",
+   "Estructura de slides"
+  ],
+  [
+   "30/09/2026",
+   "El brief perfecto en 4 preguntas",
+   "¿Qué problema resolvemos?",
+   "¿Para quién?",
+   "¿Qué tiene que hacer después de verlo?",
+   "¿Cómo medimos el éxito?",
+   "",
+   "",
+   ""
+  ]
+ ],
+ "Cliente 1": [
+  [
+   "Fecha",
+   "Contenido Slide 1",
+   "Contenido Slide 2",
+   "Contenido Slide 3",
+   "Contenido Slide 4",
+   "Contenido Slide 5",
+   "Referencia",
+   "Qué tomar"
+  ],
+  [
+   "28/09/2026",
+   "3 tips para tu primera consulta",
+   "Llegá con tus preguntas anotadas",
+   "Contá tu historia sin filtro",
+   "Pedí un plan por escrito",
+   "Reservá tu turno hoy",
+   "",
+   ""
+  ]
+ ],
+ "Cliente 2": [
+  [
+   "Fecha",
+   "Contenido Slide 1",
+   "Contenido Slide 2",
+   "Contenido Slide 3",
+   "Contenido Slide 4"
+  ],
+  [
+   "29/09/2026",
+   "Nueva colección otoño",
+   "Colores tierra y texturas suaves",
+   "Disponible en tienda y online",
+   "Envíos a todo el país"
+  ]
+ ]
+}

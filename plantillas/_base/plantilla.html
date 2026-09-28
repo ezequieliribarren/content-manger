@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<!-- Plantilla de marca (Jinja2). Variables: slide, brand, formato. Copiala a /plantillas/{cliente}/plantilla.html para personalizarla. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fondo: {{ brand.colores.fondo }};
+    --texto: {{ brand.colores.texto }};
+    --acento: {{ brand.colores.acento }};
+    --secundario: {{ brand.colores.secundario }};
+    --w: {{ formato.w }}px; --h: {{ formato.h }}px;
+    --pad: {{ (formato.w * 0.08) | int }}px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: var(--w); height: var(--h); overflow: hidden; }
+  body {
+    background: var(--fondo); color: var(--texto);
+    font-family: '{{ brand.tipografias.texto }}', Inter, system-ui, sans-serif;
+    display: flex; flex-direction: column; padding: var(--pad);
+    {% if formato.id == '9x16' %}padding-top: calc(var(--pad) * 2.6); padding-bottom: calc(var(--pad) * 3);{% endif %}
+    position: relative;
+  }
+  .glow { position: absolute; width: 70%; aspect-ratio: 1; border-radius: 50%;
+          background: radial-gradient(circle, color-mix(in srgb, var(--secundario) 55%, transparent), transparent 70%);
+          right: -20%; top: -15%; filter: blur(10px); }
+  header { display: flex; justify-content: space-between; align-items: center; font-weight: 600;
+           font-size: 30px; letter-spacing: .02em; position: relative; }
+  .marca { display: flex; gap: 14px; align-items: center; }
+  .dot { width: 22px; height: 22px; border-radius: 6px; background: var(--acento); }
+  .contador { color: var(--acento); font-variant-numeric: tabular-nums; }
+  main { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 36px; position: relative; }
+  .etiqueta { display: inline-block; align-self: flex-start; padding: 10px 22px; border-radius: 999px;
+              border: 2px solid var(--acento); color: var(--acento); font-weight: 600; font-size: 26px; }
+  h1 { font-family: '{{ brand.tipografias.titulos }}', Archivo, sans-serif; font-weight: 800; line-height: 1.02;
+       letter-spacing: -.02em; font-size: {{ 104 if slide.tipo == 'portada' else 76 }}px; }
+  h1 em { font-style: normal; color: var(--acento); }
+  p { font-size: 40px; line-height: 1.35; opacity: .92; max-width: 92%; }
+  footer { display: flex; justify-content: space-between; align-items: center; font-size: 26px; opacity: .8; position: relative; }
+  .barra { height: 8px; flex: 1; margin-left: 28px; background: color-mix(in srgb, var(--texto) 18%, transparent); border-radius: 8px; overflow: hidden; }
+  .barra i { display: block; height: 100%; width: {{ (100 * slide.numero / slide.total) | round }}%; background: var(--acento); }
+  .cta { background: var(--acento); color: var(--fondo); padding: 22px 34px; border-radius: 18px; font-weight: 700;
+         font-size: 34px; align-self: flex-start; }
+</style>
+</head>
+<body>
+  <div class="glow"></div>
+  <header>
+    <div class="marca"><span class="dot"></span>{{ brand.nombre }}</div>
+    <div class="contador">{{ '%02d' % slide.numero }}/{{ '%02d' % slide.total }}</div>
+  </header>
+  <main>
+    {% if slide.etiqueta %}<span class="etiqueta">{{ slide.etiqueta }}</span>{% endif %}
+    <h1>{{ slide.titulo | resaltar }}</h1>
+    {% if slide.texto %}<p>{{ slide.texto }}</p>{% endif %}
+    {% if slide.tipo == 'cierre' and slide.cta %}<span class="cta">{{ slide.cta }}</span>{% endif %}
+  </main>
+  <footer>
+    <span>{{ brand.handle }}</span>
+    <div class="barra"><i></i></div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "nombre": "Flaks",
+  "handle": "@flaks.agencia",
+  "colores": {"fondo": "#191035", "texto": "#FFFFFF", "acento": "#00FE5E", "secundario": "#7B5CFA"},
+  "tipografias": {"titulos": "Archivo", "texto": "Inter"},
+  "tono": "Cercano, directo y con energía. Tuteo rioplatense (vos). Frases cortas, cero relleno, un toque de humor.",
+  "reglas": ["Máximo 12 palabras en el título de cada slide", "Una sola idea por slide", "Cerrar con una llamada a la acción"],
+  "estilo_visual": "Fondo violeta oscuro, acentos verde neón, tipografía Archivo bold para títulos e Inter para texto, mucho aire, formas redondeadas."
+}

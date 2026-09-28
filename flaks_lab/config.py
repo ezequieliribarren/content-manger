@@ -50,7 +50,7 @@ DEFAULT_SETTINGS: dict = {
         "openai_imagen": "gpt-image-2",
         "openai_imagen_calidad": "medium",
         "anthropic_texto": "claude-opus-5-5",
-        "anthropic_effort": "low",
+        "anthropic_effort": "medium",
     },
     # USD. Tokens: precio por millón. Imágenes: precio por imagen (si la API no devuelve tokens).
     # Son valores de referencia: revisalos contra la página de precios de cada proveedor.
@@ -59,6 +59,7 @@ DEFAULT_SETTINGS: dict = {
         "gpt-5.5": {"input_mtok": 5.00, "output_mtok": 30.00},
         "claude-opus-5-5": {"input_mtok": 4.00, "output_mtok": 20.00},
         "claude-sonnet-5-5": {"input_mtok": 2.00, "output_mtok": 10.00},
+        "claude-opus-4-8": {"input_mtok": 5.00, "output_mtok": 25.00},
         "claude-haiku-4-5": {"input_mtok": 1.00, "output_mtok": 5.00},
         "gpt-image-2": {"input_mtok": 5.00, "image_input_mtok": 8.00, "output_mtok": 30.00, "por_imagen": 0.05},
         "gpt-image-1": {"input_mtok": 5.00, "image_input_mtok": 10.00, "output_mtok": 40.00, "por_imagen": 0.063},

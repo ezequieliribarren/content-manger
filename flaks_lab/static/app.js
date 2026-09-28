@@ -329,6 +329,7 @@ async function abrirDetalle(jobId, alCerrar) {
           ${m.estado === "esperando_manual" ? `<div class="alerta" style="background:#FFF8E6;border-color:#FFE1A6;color:#7A5200">Esperando que subas el resultado de Canva (desde la cola del Dashboard).</div>` : vista}
           <h3 class="mt">Texto por slide</h3>
           <ol class="small">${(m.textos || []).map((t) => `<li>${t.titulo ? `<b>${esc(t.titulo)}</b> ` : ""}${esc(t.texto || "")}</li>`).join("")}</ol>
+          ${m.extra?.caption ? `<h3 class="mt">Caption</h3><p class="small">${esc(m.extra.caption)}<br><span class="muted">${(m.extra.hashtags || []).map((h) => esc(h.startsWith("#") ? h : "#" + h)).join(" ")}</span></p>` : ""}
         </div>
         <div>
           <div class="card" style="box-shadow:none">

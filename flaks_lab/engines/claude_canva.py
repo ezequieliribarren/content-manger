@@ -1,9 +1,9 @@
-"""Plugin desactivado · Claude + Canva (igual que el motor 4 con texto de Claude)."""
+"""Plugin desactivado · Claude + Canva (igual que el motor 4, con el texto de Claude)."""
 from __future__ import annotations
 
 from ..models import Pieza, Uso
+from .base import Contexto, registrar
 from .gpt_canva import GptCanva
-from .base import registrar
 
 
 @registrar
@@ -16,3 +16,8 @@ class ClaudeCanva(GptCanva):
 
     def uso_simulado(self, pieza: Pieza) -> list[Uso]:
         return [Uso("anthropic", "claude-opus-5-5", input_tokens=800, output_tokens=110 * len(pieza.slides))]
+
+    def escribir(self, pieza: Pieza, ctx: Contexto):
+        from .claude_html import escribir_con_claude
+
+        return escribir_con_claude(pieza, ctx, con_referencia=False)

@@ -56,7 +56,7 @@ def estado(cliente: str | None = None):
     f = " AND j.client = ?" if cliente and cliente != "todos" else ""
     params = [cliente] if f else []
     cola = db.query(f"""SELECT j.id, j.piece_id, j.engine, j.client, j.fecha, j.status, j.step, j.created_at,
-                        j.started_at, j.error, j.simulated FROM jobs j
+                        j.started_at, j.error, j.simulated, j.output_dir FROM jobs j
                         WHERE j.status IN ('procesando', 'en_cola', 'esperando_manual'){f}
                         ORDER BY CASE j.status WHEN 'procesando' THEN 0 WHEN 'esperando_manual' THEN 1 ELSE 2 END,
                         j.fecha, j.id LIMIT 200""", params)

@@ -216,7 +216,7 @@ function colaHTML(cola, motores) {
   return `<div class="tabla-wrap"><table><thead><tr><th>Pieza</th><th>Motor</th><th>Estado</th><th>Paso</th><th></th></tr></thead><tbody>
     ${cola.map((j) => `<tr><td><b>${esc(j.piece_id)}</b><div class="small muted">${esc(j.fecha)}</div></td>
       <td>${esc(nombreMotor(motores, j.engine))}</td><td>${badge(j.status)}</td><td class="small paso-col">${esc(j.step || "—")}</td>
-      <td style="text-align:right;white-space:nowrap">${j.status === "esperando_manual" ? `<button class="btn sm verde" data-subir="${j.id}" data-sim="${j.simulated}">Subir resultado</button> ` : ""}
+      <td style="text-align:right;white-space:nowrap">${j.status === "esperando_manual" && j.output_dir ? `<a class="btn sm" href="/files/${esc(j.output_dir)}/canva/bulk-create.csv" download>CSV</a> ` : ""}${j.status === "esperando_manual" ? `<button class="btn sm verde" data-subir="${j.id}" data-sim="${j.simulated}">Subir resultado</button> ` : ""}
       <button class="btn sm" data-cancelar="${j.id}">Cancelar</button></td></tr>`).join("")}
   </tbody></table></div>`;
 }

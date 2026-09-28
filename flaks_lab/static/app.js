@@ -505,7 +505,8 @@ async function vistaConfig() {
       ${rango("Tope de carruseles por día", "ritmo_humano.tope_diario", r.tope_diario)}
       ${campo("Pausa ante captcha / límite (horas)", "ritmo_humano.pausa_bloqueo_horas", r.pausa_bloqueo_horas, "number")}
       ${campo("Franjas horarias (separadas por coma)", "ritmo_humano.franjas", r.franjas.join(", "))}</div>`; }
-  if (sec === "selectores") cuerpo = `<p class="muted">Selectores CSS de las webs automatizadas. Si Gemini o ChatGPT cambian su diseño, se corrigen acá sin tocar código.</p>
+  if (sec === "selectores") cuerpo = `<div class="form-grid" style="margin-bottom:12px">${campo("Navegador (chrome, msedge o vacío = Chromium de Playwright)", "navegador_canal", s.navegador_canal)}</div>
+      <p class="muted">Selectores CSS de las webs automatizadas. Si Gemini o ChatGPT cambian su diseño, se corrigen acá sin tocar código.</p>
       <textarea class="input" id="selectores" rows="22" style="width:100%;font-family:ui-monospace,monospace;font-size:12px">${esc(JSON.stringify(s.selectores, null, 2))}</textarea>`;
 
   app.innerHTML = `<div class="topbar"><div><h1>Configuración</h1><p>Claves, precios, límites y ritmo humano</p></div>

@@ -11,8 +11,8 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from . import config, costs, db, formats, plantillas, sheets, storage
-from .engines import base
-from .engines.base import REGISTRO, Contexto, ErrorConfiguracion, Interrumpido, Motor, MotorBloqueado
+from .engines.base import (REGISTRO, Contexto, ErrorConfiguracion, Interrumpido, Motor, MotorBloqueado,
+                           SesionRequerida)
 from .models import Pieza, Resultado, Uso
 
 ACTIVOS = ("en_cola", "procesando")
@@ -387,6 +387,13 @@ class Orquestador:
             else:
                 db.update_job(job_id, status="en_cola", step="Interrumpido: vuelve a la cola",
                               attempts=max(0, (job.get("attempts") or 0)))
+            return False
+        except SesionRequerida as e:
+            shutil.rmtree(out_dir, ignore_errors=True)
+            db.update_job(job_id, status="en_cola", step="Esperando que inicies sesión")
+            db.execute("UPDATE engine_state SET paused = 1 WHERE engine = ?", (motor.id,))
+            db.alert(str(e), engine=motor.id)
+            _notificar_escritorio("Flaks Content Lab", str(e))
             return False
         except MotorBloqueado as e:
             shutil.rmtree(out_dir, ignore_errors=True)

@@ -1,0 +1,31 @@
+<!doctype html>
+<html><body>
+<!-- Imita lo mínimo de un chat web con generación de imágenes (para testear el motor de navegador). -->
+<div id="chat"></div>
+<rich-textarea><div contenteditable="true" role="textbox" id="caja"></div></rich-textarea>
+<input type="file" id="archivo" multiple style="display:none">
+<button aria-label="Send" id="enviar">Enviar</button>
+<script>
+const modo = new URLSearchParams(location.search).get("modo") || "ok";
+window.prompts = []; window.adjuntos = 0;
+document.getElementById("archivo").addEventListener("change", (e) => { window.adjuntos += e.target.files.length; });
+document.getElementById("enviar").onclick = () => {
+  const caja = document.getElementById("caja");
+  window.prompts.push(caja.innerText);
+  caja.innerText = "";
+  setTimeout(() => {
+    const r = document.createElement("model-response");
+    if (modo === "bloqueo") {
+      r.innerText = "Our systems have detected unusual traffic from your computer network.";
+    } else {
+      const c = document.createElement("canvas"); c.width = 800; c.height = 1000;
+      const g = c.getContext("2d"); g.fillStyle = "#191035"; g.fillRect(0, 0, 800, 1000);
+      g.fillStyle = "#00FE5E"; g.font = "60px sans-serif"; g.fillText("slide " + window.prompts.length, 80, 500);
+      const img = document.createElement("img"); img.src = c.toDataURL("image/png");
+      r.appendChild(img);
+    }
+    document.getElementById("chat").appendChild(r);
+  }, 300);
+};
+</script>
+</body></html>

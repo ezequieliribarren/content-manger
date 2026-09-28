@@ -89,13 +89,17 @@ DEFAULT_SETTINGS: dict = {
         "franjas": ["09:00-11:00", "14:00-16:00", "20:00-22:00"],
         "pausa_bloqueo_horas": 24,
     },
+    # Navegador para los motores web: "chrome" usa tu Google Chrome instalado (Google suele bloquear el login
+    # en Chromium); si no está, se usa el Chromium de Playwright.
+    "navegador_canal": "chrome",
     # Selectores de las webs automatizadas. Cambian seguido: se editan desde Configuración.
     "selectores": {
         "gemini_web": {
             "url": "https://gemini.google.com/app",
             "prompt": "rich-textarea div[contenteditable='true'], div[contenteditable='true'][role='textbox']",
             "enviar": "button[aria-label*='Send'], button[aria-label*='Enviar']",
-            "subir_menu": "button[aria-label*='upload'], button[aria-label*='Subir'], button[aria-label*='Upload']",
+            "subir_menu": "button[aria-label*='upload' i], button[aria-label*='subir' i], button[aria-label*='archivo' i]",
+            "subir_item": "[role='menuitem']:has-text('Subir archivos'), [role='menuitem']:has-text('Upload files'), button:has-text('Subir archivos'), button:has-text('Upload files')",
             "input_archivo": "input[type='file']",
             "imagen_respuesta": "model-response img, message-content img, .response-container img",
             "respuesta_lista": "model-response",
@@ -105,7 +109,8 @@ DEFAULT_SETTINGS: dict = {
             "url": "https://chatgpt.com/",
             "prompt": "#prompt-textarea, div[contenteditable='true']",
             "enviar": "button[data-testid='send-button'], button[aria-label*='Send']",
-            "subir_menu": "",
+            "subir_menu": "button[aria-label*='Attach' i], button[aria-label*='Adjuntar' i]",
+            "subir_item": "",
             "input_archivo": "input[type='file']",
             "imagen_respuesta": "div[data-message-author-role='assistant'] img",
             "respuesta_lista": "div[data-message-author-role='assistant']",

@@ -27,6 +27,10 @@ class MotorBloqueado(Exception):
     """Captcha, aviso de actividad inusual o límite de uso: se pausa el motor 24 h."""
 
 
+class SesionRequerida(MotorBloqueado):
+    """El sitio pide iniciar sesión: se pausa el motor hasta que el usuario inicie sesión y lo reanude."""
+
+
 class ErrorConfiguracion(Exception):
     """Falta una clave, una plantilla o un login: no tiene sentido reintentar."""
 

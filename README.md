@@ -91,6 +91,28 @@ cancela su cola, pero conserva historial y archivos (se puede restaurar desde *M
 | – | Claude + Canva (desactivado) | la ignora | 4:5 |
 | – | Scraping ChatGPT web (desactivado) | imagen | 4:5 |
 
+### Pasar un motor de simulado a real
+
+Todos los motores arrancan **simulados**. Para usar uno de verdad: cargá la clave que necesita en
+*Configuración → Claves*, apagá su simulación en *Configuración → Simulación* y guardá.
+
+- **1 · GPT + HTML** (`OPENAI_API_KEY`): la Responses API devuelve el texto final de cada slide en JSON
+  (título, texto, etiqueta, CTA, caption y hashtags). Se renderiza `plantilla.html` con Playwright en 4:5, 9:16 y
+  1:1, y un PDF vectorial para LinkedIn. Modelo en *Configuración → Modelos* (`openai_texto`).
+- **2 · Claude + HTML** (`ANTHROPIC_API_KEY`): mismo flujo con la API de Anthropic (`claude-opus-5-5` por defecto,
+  `anthropic_effort` configurable). Si el modelo declina un pedido, la API lo reintenta en el modelo de respaldo
+  recomendado y el costo se calcula con el modelo que respondió.
+- **3 · Python + GPT imagen** (`OPENAI_API_KEY`): una llamada a la API de imágenes por slide y por formato,
+  con la plantilla (y la referencia) como imágenes de entrada. Por defecto genera 4:5, 9:16 y 1:1 (15 imágenes
+  para 5 slides); en *Configuración → Límites* podés dejar solo `4x5` y reexportar el resto para gastar un tercio.
+- **4 · GPT + Canva** (`OPENAI_API_KEY`): deja `canva/bulk-create.csv` (una fila por carrusel:
+  `slide1_titulo`, `slide1_texto`, …). En Canva: *Apps → Bulk create → subir CSV*, conectá cada campo con su
+  texto, generá y descargá los slides (PNG, ZIP o PDF). En el Dashboard, *Subir resultado* en la cola.
+- **5 · Gemini web**: tocá *Sesión* en la tarjeta del motor, iniciá sesión en la ventana que se abre y cerrala.
+  El perfil queda en `data/navegador/gemini_web/`. Usa tu Google Chrome si está instalado (Google suele bloquear
+  el login en Chromium); se cambia en *Configuración → Selectores web*. Solo trabaja dentro de las franjas
+  horarias. Si Gemini cambia su diseño, corregí los selectores CSS en esa misma pantalla.
+
 ## Costos
 
 Los motores de API guardan por pieza los tokens / imágenes que devuelve cada respuesta y los multiplican por la
@@ -108,5 +130,25 @@ espera creciente.
 ## Tests
 
 ```bash
-pytest -q
+pytest -q        # no llaman a ninguna API: usan clientes y una página de chat falsos
+```
+
+## Estructura
+
+```
+flaks_lab/
+  main.py            API local (FastAPI) + archivos estáticos
+  orchestrator.py    lectura del Sheet, colas por motor, ritmo humano, bloqueos, costos, meta.json
+  engines/           un archivo por motor (plugins) · base.py = interfaz · _navegador.py = base de chats web
+  sheets.py          Google Sheets (cuenta de servicio, solo lectura) y modo demo
+  plantillas.py      plantilla de marca por cliente y referencias (Drive o /referencias)
+  redaccion.py       instrucciones y esquema JSON del texto de los carruseles
+  render.py          plantilla HTML → PNG / PDF con Playwright
+  formats.py         reexportación 4:5 → 9:16, 1:1, PDF y reel MP4
+  costs.py, stats.py costos y métricas del ranking
+  static/            frontend (HTML + CSS + JS, sin build)
+plantillas/{cliente}/  brand.json, plantilla.html, plantilla.png
+referencias/{cliente}/ imágenes de referencia
+output/                resultados (se crea al generar)
+data/                  base SQLite, perfiles de navegador (se crea al iniciar)
 ```

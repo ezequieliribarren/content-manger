@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import config, db, stats, storage
-from .engines.base import REGISTRO
+from .engines.base import REGISTRO, motor_visible
 from .orchestrator import orquestador
 
 STATIC = Path(__file__).parent / "static"
@@ -49,7 +49,7 @@ def _motor(motor_id: str):
 @app.get("/api/estado")
 def estado(cliente: str | None = None):
     settings = db.get_settings()
-    motores = [m for m in stats.ranking(cliente) if not m["eliminado"]]
+    motores = [m for m in stats.ranking(cliente) if not m["eliminado"] and not m["oculto"]]
     for m in motores:
         m["runtime"] = orquestador.runtime.get(m["id"], {})
         m["simulado"] = bool(settings["simulacion"].get(m["id"], True))
@@ -84,7 +84,7 @@ def _fuentes(settings: dict) -> list[dict]:
         s = guardadas.get(c["id"], {})
         out.append({"cliente": c["id"], "nombre": c["nombre"], "pestana": c["pestana"], "activo": c.get("activo", True),
                     "estado": s.get("status") or "sin leer", "modo": s.get("mode") or
-                    ("google" if sheets.hay_credenciales(settings) else "demo"),
+                    ("google" if sheets.usa_google(settings) else "local"),
                     "filas": s.get("rows"), "ultima": s.get("last_sync"), "error": s.get("error")})
     return out
 
@@ -93,6 +93,78 @@ def _fuentes(settings: dict) -> list[dict]:
 def sync(payload: dict = Body(default={})):
     cliente = payload.get("cliente")
     return orquestador.sincronizar(None if cliente in (None, "", "todos") else cliente)
+
+
+# ------------------------------------------------------------------ hoja local (pantalla Sheets)
+def _cliente(settings: dict, cliente_id: str) -> dict:
+    for c in settings["clientes"]:
+        if c["id"] == cliente_id:
+            return c
+    raise HTTPException(404, "Cliente inexistente")
+
+
+@app.get("/api/sheet/{cliente_id}")
+def get_sheet(cliente_id: str):
+    from . import sheets
+
+    settings = db.get_settings()
+    c = _cliente(settings, cliente_id)
+    n, filas = sheets.valores_a_filas(sheets.leer_local().get(c["pestana"], []))
+    return {"cliente": c["id"], "pestana": c["pestana"], "slides": n, "filas": filas,
+            "fuente": settings.get("fuente_sheets", "local")}
+
+
+@app.put("/api/sheet/{cliente_id}")
+def put_sheet(cliente_id: str, payload: dict = Body(...)):
+    from . import sheets
+
+    c = _cliente(db.get_settings(), cliente_id)
+    n = max(1, min(int(payload.get("slides") or 5), 20))
+    valores = sheets.filas_a_valores(n, payload.get("filas") or [])
+    sheets.guardar_local(c["pestana"], valores)
+    return {"ok": True, "filas": len(valores) - 1}
+
+
+IMG_SUBIDA = (".png", ".jpg", ".jpeg", ".webp")
+
+
+@app.post("/api/sheet/{cliente_id}/generar")
+def generar_fila(cliente_id: str, payload: dict = Body(...)):
+    _cliente(db.get_settings(), cliente_id)
+    try:
+        return orquestador.regenerar(cliente_id, int(payload["fila"]))
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@app.post("/api/sheet/{cliente_id}/imagen")
+async def subir_imagen_sheet(cliente_id: str, archivo: UploadFile = File(...)):
+    """Guarda una imagen de referencia o plantilla en referencias/{cliente}/ y devuelve su nombre."""
+    import hashlib
+
+    from .models import slugify
+
+    c = _cliente(db.get_settings(), cliente_id)
+    ext = Path(archivo.filename or "").suffix.lower()
+    if ext not in IMG_SUBIDA:
+        raise HTTPException(400, "Subí una imagen PNG, JPG o WEBP")
+    datos = await archivo.read()
+    if len(datos) > 20 * 1024 * 1024:
+        raise HTTPException(400, "La imagen pesa más de 20 MB")
+    nombre = f"{slugify(Path(archivo.filename).stem)[:40]}-{hashlib.sha1(datos).hexdigest()[:8]}{ext}"
+    carpeta = config.REFERENCES_DIR / c["id"]
+    carpeta.mkdir(parents=True, exist_ok=True)
+    (carpeta / nombre).write_bytes(datos)
+    return {"nombre": nombre}
+
+
+@app.get("/api/sheet/{cliente_id}/imagen/{nombre}")
+def ver_imagen_sheet(cliente_id: str, nombre: str):
+    carpeta = (config.REFERENCES_DIR / cliente_id).resolve()
+    ruta = (carpeta / nombre).resolve()
+    if ruta.parent != carpeta or not ruta.is_file():
+        raise HTTPException(404, "Imagen inexistente")
+    return FileResponse(ruta)
 
 
 @app.post("/api/alertas/{alerta_id}/descartar")
@@ -117,7 +189,12 @@ def encender(motor_id: str, payload: dict = Body(...)):
 @app.post("/api/motores/{motor_id}/pausar")
 def pausar(motor_id: str, payload: dict = Body(...)):
     _motor(motor_id)
-    orquestador.pausar(motor_id, bool(payload.get("pausado")))
+    pausado = bool(payload.get("pausado"))
+    if not pausado:  # reanudar = "ya terminé en la ventana de Sesión": se cierra para liberar el perfil
+        from .engines._navegador import cerrar_ventana_login
+
+        cerrar_ventana_login(motor_id)
+    orquestador.pausar(motor_id, pausado)
     return {"ok": True}
 
 
@@ -143,7 +220,11 @@ def abrir_login(motor_id: str):
         raise HTTPException(400, "Este motor no usa navegador")
     import threading
 
-    threading.Thread(target=motor.abrir_para_login, args=(db.get_settings(),), daemon=True).start()
+    def login_y_reanudar():
+        motor.abrir_para_login(db.get_settings())
+        orquestador.pausar(motor_id, False)
+
+    threading.Thread(target=login_y_reanudar, daemon=True).start()
     return {"ok": True}
 
 
@@ -285,8 +366,8 @@ def _enmascarar(s: dict) -> dict:
 def get_config():
     s = db.get_settings()
     return {"settings": _enmascarar(s),
-            "motores": [{"id": k, "nombre": c.nombre, "orden": c.orden} for k, c in
-                        sorted(REGISTRO.items(), key=lambda kv: kv[1].orden)],
+            "motores": [{"id": k, "nombre": c.nombre, "orden": c.orden, "oculto": not motor_visible(s, k)}
+                        for k, c in sorted(REGISTRO.items(), key=lambda kv: kv[1].orden)],
             "eliminados": [r["engine"] for r in db.query("SELECT engine FROM engine_state WHERE deleted = 1")]}
 
 

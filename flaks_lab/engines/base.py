@@ -43,6 +43,11 @@ class ErrorReintentable(Exception):
     """Error transitorio (rate limit, 5xx, timeout)."""
 
 
+def motor_visible(settings: dict, motor_id: str) -> bool:
+    visibles = settings.get("motores_visibles")
+    return visibles is None or motor_id in visibles
+
+
 class Contexto:
     """Todo lo que un motor necesita para trabajar, sin tocar el resto de la app."""
 

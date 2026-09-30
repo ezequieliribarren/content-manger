@@ -181,3 +181,13 @@ pre.log { white-space: pre-wrap; font-size: 12px; margin: 0; font-family: ui-mon
 td.nombre-motor { min-width: 170px; }
 td.paso-col { min-width: 170px; }
 .sidebar { min-height: 100vh; }
+
+/* ---------- sheets (hoja local) ---------- */
+table.hoja td { vertical-align: top; padding: 4px; }
+table.hoja th { white-space: nowrap; }
+table.hoja .celda { width: 100%; min-width: 190px; resize: vertical; font: inherit; font-size: 13px; line-height: 1.35; }
+table.hoja input[type=date] { min-width: 140px; }
+table.hoja select.input { min-width: 150px; }
+table.hoja .celda-img { min-width: 120px; }
+table.hoja .celda-img img { width: 96px; height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid var(--borde); display: block; margin-bottom: 4px; }
+table.hoja .celda-img .small { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 4px; }

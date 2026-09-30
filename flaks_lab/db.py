@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS pieces (
     slides TEXT NOT NULL,
     referencia TEXT,
     que_tomar TEXT,
+    plantilla TEXT,
     content_hash TEXT NOT NULL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -136,6 +137,9 @@ def init() -> None:
     _db_path.parent.mkdir(parents=True, exist_ok=True)
     with conn() as c:
         c.executescript(SCHEMA)
+        # columnas agregadas después de la primera versión
+        if "plantilla" not in [r[1] for r in c.execute("PRAGMA table_info(pieces)")]:
+            c.execute("ALTER TABLE pieces ADD COLUMN plantilla TEXT")
 
 
 def query(sql: str, params: tuple | list = ()) -> list[dict]:

@@ -13,6 +13,7 @@ from pathlib import Path
 from . import config, costs, db, formats, plantillas, sheets, storage
 from .engines.base import (REGISTRO, Contexto, ErrorConfiguracion, Interrumpido, Motor, MotorBloqueado,
                            SesionRequerida)
+from .engines.base import motor_visible
 from .models import Pieza, Resultado, Uso
 
 ACTIVOS = ("en_cola", "procesando")
@@ -167,32 +168,54 @@ class Orquestador:
         import json
 
         db.execute(
-            "INSERT INTO pieces (id, client, fecha, fila, slides, referencia, que_tomar, content_hash, created_at, "
-            "updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET "
+            "INSERT INTO pieces (id, client, fecha, fila, slides, referencia, que_tomar, plantilla, content_hash, "
+            "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET "
             "slides=excluded.slides, referencia=excluded.referencia, que_tomar=excluded.que_tomar, "
+            "plantilla=excluded.plantilla, "
             "content_hash=excluded.content_hash, updated_at=excluded.updated_at, fecha=excluded.fecha",
             (p.id, p.cliente, p.fecha, p.fila, json.dumps(p.slides, ensure_ascii=False), p.referencia,
-             p.que_tomar, p.content_hash, db.now(), db.now()))
+             p.que_tomar, p.plantilla, p.content_hash, db.now(), db.now()))
 
     def encolar(self, p: Pieza, motores: list[str] | None = None, run_id: int | None = None,
                 forzar: bool = False) -> int:
         """Encola la pieza en cada motor encendido que todavía no la tenga (misma versión de contenido)."""
         n = 0
+        ajustes = db.get_settings()
         for st in db.query("SELECT * FROM engine_state WHERE deleted = 0"):
             motor_id = st["engine"]
             if motor_id not in REGISTRO or (motores and motor_id not in motores):
                 continue
-            if not motores and not st["enabled"]:
+            if not motores and (not st["enabled"] or not motor_visible(ajustes, motor_id)):
                 continue
             if not forzar and db.one(
                     "SELECT id FROM jobs WHERE piece_id = ? AND engine = ? AND content_hash = ? "
                     "AND status NOT IN ('error', 'cancelado')", (p.id, motor_id, p.content_hash)):
+                continue
+            if forzar and db.one(  # nunca dos trabajos en curso de la misma pieza en el mismo motor
+                    "SELECT id FROM jobs WHERE piece_id = ? AND engine = ? "
+                    "AND status IN ('en_cola', 'procesando', 'esperando_manual')", (p.id, motor_id)):
                 continue
             db.execute("INSERT INTO jobs (piece_id, engine, client, fecha, content_hash, status, run_id, created_at) "
                        "VALUES (?, ?, ?, ?, ?, 'en_cola', ?, ?)",
                        (p.id, motor_id, p.cliente, p.fecha, p.content_hash, run_id, db.now()))
             n += 1
         return n
+
+    def regenerar(self, cliente: str, fila: int) -> dict:
+        """Lee el Sheet del cliente y vuelve a encolar la idea de esa fila, aunque ya se haya generado."""
+        ultimo = db.one("SELECT COALESCE(MAX(id), 0) AS n FROM jobs")["n"]
+        self.sincronizar(cliente, trigger="regenerar")
+        row = db.one("SELECT * FROM pieces WHERE client = ? AND fila = ? ORDER BY updated_at DESC", (cliente, fila))
+        if not row:
+            raise ValueError("Esa fila no tiene fecha o no tiene texto en ningún slide")
+        pieza = Pieza.from_row(row)
+        self.encolar(pieza, forzar=True)
+        encolados = db.one("SELECT COUNT(*) AS n FROM jobs WHERE piece_id = ? AND id > ?", (pieza.id, ultimo))["n"]
+        en_curso = db.one("SELECT COUNT(*) AS n FROM jobs WHERE piece_id = ? AND status IN ('en_cola', 'procesando')",
+                          (pieza.id,))["n"]
+        pausados = [r["engine"] for r in db.query("SELECT engine FROM engine_state WHERE enabled = 1 AND paused = 1")]
+        db.log(f"Regenerar {pieza.id}: {encolados} trabajos encolados")
+        return {"pieza": pieza.id, "encolados": encolados, "en_curso": en_curso, "pausados": pausados}
 
     def _auto_sync(self) -> None:
         ultimo = datetime.now()
@@ -252,12 +275,13 @@ class Orquestador:
         if motor.ritmo_humano:
             ritmo = settings["ritmo_humano"]
             hoy = date.today().isoformat()
+            tope = [int(x or 0) for x in ritmo.get("tope_diario") or [0, 0]]
             if st.get("day") != hoy:
-                cap = random.randint(*[int(x) for x in ritmo["tope_diario"]])
+                cap = random.randint(min(tope), max(tope))
                 db.execute("UPDATE engine_state SET day = ?, day_count = 0, day_cap = ? WHERE engine = ?",
                            (hoy, cap, motor.id))
                 st = {**st, "day": hoy, "day_count": 0, "day_cap": cap}
-            if st["day_count"] >= (st["day_cap"] or 0):
+            if max(tope) > 0 and st["day_count"] >= (st["day_cap"] or 0):
                 return f"Tope diario alcanzado ({st['day_count']}/{st['day_cap']})"
             if not simulado and not en_franja(ritmo["franjas"]):
                 return f"Fuera de franja horaria · próxima {proxima_franja(ritmo['franjas'])}"
@@ -276,7 +300,7 @@ class Orquestador:
         cls = REGISTRO[motor_id]
         while not self._stop.is_set():
             st = self.estado_motor(motor_id)
-            if not st or st["deleted"] or not st["enabled"]:
+            if not st or st["deleted"] or not st["enabled"] or not motor_visible(db.get_settings(), motor_id):
                 self.runtime[motor_id] = {"estado": "apagado"}
                 self._stop.wait(1.5)
                 continue
@@ -344,9 +368,16 @@ class Orquestador:
     def _contexto(self, job: dict, motor: Motor, pieza: Pieza, out_dir: Path, settings: dict,
                   simulado: bool, referencia: Path | None) -> Contexto:
         job_id, motor_id = job["id"], motor.id
+        plantilla = plantillas.cargar(pieza.cliente)
+        if pieza.plantilla:
+            try:
+                plantilla.imagen = plantillas.resolver_referencia(pieza.cliente, pieza.plantilla, settings)
+            except Exception as e:  # noqa: BLE001
+                db.log(f"Plantilla de la fila no disponible ({e}); uso la del cliente", "warning",
+                       engine=motor_id, job_id=job_id)
         return Contexto(
             job_id=job_id, motor_id=motor_id, pieza=pieza, out_dir=out_dir, settings=settings,
-            plantilla=plantillas.cargar(pieza.cliente), referencia=referencia, simulado=simulado,
+            plantilla=plantilla, referencia=referencia, simulado=simulado,
             log=lambda m, lvl="info": db.log(m, lvl, engine=motor_id, job_id=job_id, run_id=job.get("run_id")),
             set_step=lambda s: db.update_job(job_id, step=s),
             debe_parar=lambda: self._debe_parar(motor_id, job_id), stop_event=self._stop)

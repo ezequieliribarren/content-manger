@@ -18,13 +18,42 @@ playwright install chromium
 python -m flaks_lab                  # abre el navegador en http://127.0.0.1:8765
 ```
 
-Sin configurar nada, la app arranca en **modo demo**: lee `datos/demo_sheet.json` en lugar del Sheet
-y todos los motores están **simulados** (no llaman a ninguna API ni abren el navegador). Tocá
-*Leer Sheets y generar* en el Dashboard para ver el flujo completo.
+Sin configurar nada, la app lee el **Sheet local** (pantalla *Sheets*, que arranca con el contenido de
+`datos/demo_sheet.json`) y todos los motores están **simulados** (no llaman a ninguna API ni abren el navegador).
+Tocá *Leer Sheets y generar* en el Dashboard para ver el flujo completo.
 
 Si Playwright no encuentra Chromium, podés indicar el ejecutable con la variable `FLAKS_CHROMIUM`.
 
-## Conectar el Google Sheet
+## Inicio rápido con ChatGPT web
+
+Por ahora la app muestra un solo motor, **ChatGPT web**: maneja chatgpt.com en tu Google Chrome, con tu cuenta
+(los demás están ocultos, no borrados: se vuelven a mostrar en *Configuración → Motores visibles*).
+
+1. Instalá Google Chrome y levantá la app (`python -m flaks_lab`).
+2. *Configuración → Simulación*: apagá la simulación de **ChatGPT web** y guardá.
+3. *Dashboard → tarjeta ChatGPT web → Sesión*: se abre un Chrome normal con el perfil de la app
+   (`data/navegador/gpt_web/`, separado de tu Chrome de siempre). Iniciá sesión en ChatGPT y **cerrá esa ventana**
+   (o tocá *Reanudar*, que la cierra): mientras esté abierta, el motor no puede usar el perfil.
+   No inicies sesión en la ventana que abre el motor al trabajar: Google rechaza el login ahí.
+4. *Sheets*: una fila = un carrusel (Fecha, Plantilla, Referencia, Qué tomar de la referencia, Slide 1…N).
+   **▶ Generar** manda esa fila a generar, aunque ya se haya generado antes (cada versión queda en `-v2`, `-v3`…).
+   La app genera un slide por cada columna de slide con texto.
+5. Los resultados quedan en *Contenido finalizado* y en `output/`. Si algo falla, en `data/diagnostico/` queda una
+   captura y el HTML de la página, y en *Historial* el error.
+
+Cada persona usa su propia sesión de ChatGPT: `data/` (sesión, base, Sheet local) no se sube al repositorio.
+Los tiempos (tipeo, pausas, tope diario, franjas) se ajustan en *Configuración → Ritmo humano*.
+
+## Sheet local o Google Sheet
+
+En *Configuración → Claves → Fuente de las piezas* elegís de dónde salen las piezas:
+
+- **Sheet local de la app** (por defecto): se edita en la pantalla *Sheets*, con una pestaña por cliente y el
+  mismo formato que el Google Sheet (Fecha, Contenido Slide 1…N, Referencia, Qué tomar). Se guarda en
+  `data/sheet_local.json`. *Guardar y generar* guarda y encola las filas de ese cliente.
+- **Google Sheets**: se lee con una cuenta de servicio, como se explica abajo.
+
+### Conectar el Google Sheet
 
 1. En Google Cloud, creá una cuenta de servicio, habilitá **Google Sheets API** (y **Google Drive API** si vas a
    usar referencias de Drive) y descargá su JSON a `credenciales/service-account.json`.
@@ -65,6 +94,7 @@ reexportan desde el 4:5. La pantalla *Contenido finalizado* se arma leyendo los 
 
 ## Pantallas
 
+- **Sheets**: planificación local por cliente (una fila = un carrusel), editable en la app.
 - **Dashboard**: tabs de cliente, tarjetas de motores con toggle / Pausar / Eliminar, barra de progreso con pasos,
   fuentes de Google Sheets con estado y cola de generación (incluye *Subir resultado* para Canva).
 - **Contenido finalizado**: tabla con miniaturas, filtros por tipo, herramienta, cliente, estado, búsqueda y fechas.
@@ -140,7 +170,7 @@ flaks_lab/
   main.py            API local (FastAPI) + archivos estáticos
   orchestrator.py    lectura del Sheet, colas por motor, ritmo humano, bloqueos, costos, meta.json
   engines/           un archivo por motor (plugins) · base.py = interfaz · _navegador.py = base de chats web
-  sheets.py          Google Sheets (cuenta de servicio, solo lectura) y modo demo
+  sheets.py          Google Sheets (cuenta de servicio, solo lectura) y Sheet local
   plantillas.py      plantilla de marca por cliente y referencias (Drive o /referencias)
   redaccion.py       instrucciones y esquema JSON del texto de los carruseles
   render.py          plantilla HTML → PNG / PDF con Playwright

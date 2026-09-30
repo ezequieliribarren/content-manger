@@ -12,6 +12,7 @@ TEMPLATES_DIR = ROOT / "plantillas"
 REFERENCES_DIR = ROOT / "referencias"
 DEMO_SHEET = ROOT / "datos" / "demo_sheet.json"
 DB_PATH = DATA_DIR / "lab.db"
+LOCAL_SHEET = DATA_DIR / "sheet_local.json"
 BROWSER_PROFILES_DIR = DATA_DIR / "navegador"
 
 # Formatos de salida. "4x5" es el formato base desde el que se reexporta el resto.
@@ -31,6 +32,11 @@ DEFAULT_SETTINGS: dict = {
         "google_service_account_json": "credenciales/service-account.json",
         "spreadsheet_id": "",
     },
+    # Motores que se muestran y trabajan. Los demás quedan ocultos (no se borran: se vuelven a mostrar
+    # desde Configuración → Motores visibles).
+    "motores_visibles": ["gpt_web"],
+    # De dónde salen las piezas: "local" (pantalla Sheets de la app) o "google" (Google Sheets).
+    "fuente_sheets": "local",
     "clientes": [
         {"id": "flaks", "nombre": "Flaks", "pestana": "Flaks", "activo": True},
         {"id": "cliente-1", "nombre": "Cliente 1", "pestana": "Cliente 1", "activo": True},
@@ -85,7 +91,7 @@ DEFAULT_SETTINGS: dict = {
         "pausa_entre_carruseles_min": [5, 12],
         "descanso_cada_n": [4, 5],
         "descanso_min": [15, 30],
-        "tope_diario": [8, 10],
+        "tope_diario": [0, 0],  # carruseles por día; 0 = sin tope (solo cuentan las pausas)
         "franjas": ["09:00-11:00", "14:00-16:00", "20:00-22:00"],
         "pausa_bloqueo_horas": 24,
     },
@@ -112,8 +118,10 @@ DEFAULT_SETTINGS: dict = {
             "subir_menu": "button[aria-label*='Attach' i], button[aria-label*='Adjuntar' i]",
             "subir_item": "",
             "input_archivo": "input[type='file']",
-            "imagen_respuesta": "div[data-message-author-role='assistant'] img",
-            "respuesta_lista": "div[data-message-author-role='assistant']",
+            # La imagen generada vive en section[data-turn=assistant] > div[data-image-gen-result] (sep. 2026).
+            # Hay varias capas con el mismo src: la que tiene alt ("Imagen generada: …") es la final.
+            "imagen_respuesta": "section[data-turn='assistant'] [data-image-gen-result] img[alt]:not([alt=''])",
+            "respuesta_lista": "section[data-turn='assistant']",
             "login": "button[data-testid='login-button']",
         },
     },

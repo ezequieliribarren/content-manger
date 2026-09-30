@@ -25,9 +25,11 @@ def orq():
     """Orquestador sin hilos, con base y /output limpios y todo en modo simulado y rápido."""
     shutil.rmtree(config.OUTPUT_DIR, ignore_errors=True)
     config.DB_PATH.unlink(missing_ok=True)
+    config.LOCAL_SHEET.unlink(missing_ok=True)
     o = Orquestador()
     o.iniciar(workers=False)
     s = db.get_settings()
+    s["motores_visibles"] = None  # en los tests se ven y trabajan todos los motores
     s["simulacion_escala_tiempo"] = 0
     s["simulacion_tasa_error"] = 0
     s["limites"]["api_espera_min_s"] = 0

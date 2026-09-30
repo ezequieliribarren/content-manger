@@ -11,6 +11,7 @@ const S = {
   orden: { col: "puntaje", dir: -1 },
   timer: null,
   cfgSeccion: "claves",
+  sheetCliente: localStorage.getItem("sheetCliente") || "",
 };
 
 // ---------------------------------------------------------------- utilidades
@@ -60,7 +61,7 @@ $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") cerr
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") cerrarModal(); });
 
 // ---------------------------------------------------------------- router
-const RUTAS = { dashboard: vistaDashboard, contenido: vistaContenido, motores: vistaMotores, historial: vistaHistorial, configuracion: vistaConfig };
+const RUTAS = { dashboard: vistaDashboard, sheets: vistaSheets, contenido: vistaContenido, motores: vistaMotores, historial: vistaHistorial, configuracion: vistaConfig };
 function ruta() {
   const r = (location.hash.replace("#/", "") || "dashboard").split("?")[0];
   return RUTAS[r] ? r : "dashboard";
@@ -114,7 +115,8 @@ async function renderDashboard(refresco = false) {
     <div class="card mt">${progresoHTML(d.progreso)}</div>
 
     <div class="grid g-2 mt">
-      <div class="card"><h2>Fuentes de Google Sheets</h2>${d.fuentes.map(fuenteHTML).join("")}</div>
+      <div class="card"><div class="row" style="margin-bottom:10px"><h2 style="margin:0">Fuentes</h2><span class="spacer"></span>
+        <a href="#/sheets" class="small">Editar Sheet local →</a></div>${d.fuentes.map(fuenteHTML).join("")}</div>
       <div class="card"><div class="row" style="margin-bottom:10px"><h2 style="margin:0">Cola de generación</h2><span class="spacer"></span>
         <span class="muted small">${d.cola.length} activos</span></div>${colaHTML(d.cola, d.motores)}
         ${d.recientes.length ? `<h3 class="mt" style="margin-bottom:6px">Últimos terminados</h3>${recientesHTML(d.recientes, d.motores)}` : ""}
@@ -123,7 +125,11 @@ async function renderDashboard(refresco = false) {
   bindTabs(renderDashboard);
   $("#sync").onclick = async (e) => {
     e.target.disabled = true;
-    try { const x = await api("/api/sync", { method: "POST", body: { cliente: S.cliente } }); toast(`${x.piezas} piezas leídas · ${x.encolados} trabajos encolados`); }
+    try {
+      const x = await api("/api/sync", { method: "POST", body: { cliente: S.cliente } });
+      toast(x.encolados ? `${x.piezas} piezas leídas · ${x.encolados} trabajos encolados`
+        : `${x.piezas} piezas leídas · nada nuevo para generar. Para repetir una idea usá ▶ Generar en Sheets.`);
+    }
     catch (err) { toast(err.message, true); }
     renderDashboard();
   };
@@ -205,7 +211,7 @@ function progresoHTML(p) {
 function fuenteHTML(f) {
   const est = f.estado === "ok" ? badge("ok", "Conectada") : f.estado === "error" ? badge("error", "Error") : badge("pendiente", "Sin leer");
   return `<div class="fuente"><span class="fuente-ic">S</span><div style="flex:1;min-width:0"><b>${esc(f.nombre)}</b>
-    <div class="small muted">Pestaña “${esc(f.pestana)}” · ${f.modo === "demo" ? "Modo demo (sin credenciales)" : "Google Sheets"}${f.filas != null ? ` · ${f.filas} filas` : ""}${f.ultima ? ` · ${fecha(f.ultima)}` : ""}</div>
+    <div class="small muted">Pestaña “${esc(f.pestana)}” · ${f.modo === "google" ? "Google Sheets" : "Sheet local de la app"}${f.filas != null ? ` · ${f.filas} filas` : ""}${f.ultima ? ` · ${fecha(f.ultima)}` : ""}</div>
     ${f.error ? `<div class="small" style="color:var(--rojo)">${esc(f.error)}</div>` : ""}</div>${f.activo ? est : badge("apagado", "Inactiva")}</div>`;
 }
 
@@ -263,7 +269,7 @@ async function vistaContenido() {
       <div class="filtros">
         <input class="input buscar" id="f-q" placeholder="Buscar por texto, pieza o cliente…" value="${esc(f.q)}">
         <select class="input" id="f-tipo">${opt([["", "Todos los tipos"], ["carrusel", "Carrusel 4:5"], ["historia", "Historia 9:16"], ["reel", "Reel 9:16"], ["post", "Post 1:1"], ["pdf", "PDF LinkedIn"]], f.tipo)}</select>
-        <select class="input" id="f-motor">${opt([["", "Todas las herramientas"], ...cfg.motores.map((m) => [m.id, m.nombre])], f.motor)}</select>
+        <select class="input" id="f-motor">${opt([["", "Todas las herramientas"], ...cfg.motores.filter((m) => !m.oculto).map((m) => [m.id, m.nombre])], f.motor)}</select>
         <select class="input" id="f-cliente">${opt([["", "Todos los clientes"], ...est.clientes.map((c) => [c.id, c.nombre])], f.cliente)}</select>
         <select class="input" id="f-estado">${opt([["", "Todos los estados"], ["pendiente", "Por revisar"], ["aprobado", "Aprobado"], ["descartado", "Descartado"], ["esperando_manual", "Esperando subida"]], f.estado)}</select>
         <input class="input" type="date" id="f-desde" value="${esc(f.desde)}" title="Desde">
@@ -383,8 +389,8 @@ async function abrirDetalle(jobId, alCerrar) {
 // ================================================================= MOTORES
 async function vistaMotores() {
   const [d, est, cfg] = await Promise.all([api(`/api/motores?cliente=${encodeURIComponent(S.cliente)}`), api("/api/estado"), api("/api/config")]);
-  const activos = d.ranking.filter((m) => !m.eliminado);
-  const eliminados = d.ranking.filter((m) => m.eliminado);
+  const activos = d.ranking.filter((m) => !m.eliminado && !m.oculto);
+  const eliminados = d.ranking.filter((m) => m.eliminado && !m.oculto);
   const o = S.orden;
   const val = (m) => { const v = m[o.col]; return v == null ? (o.dir > 0 ? Infinity : -Infinity) : v; };
   activos.sort((a, b) => (val(a) > val(b) ? 1 : val(a) < val(b) ? -1 : 0) * o.dir);
@@ -441,7 +447,7 @@ async function vistaHistorial() {
     </tbody></table></div></div>
     <div class="card mt"><div class="row" style="margin-bottom:10px"><h2 style="margin:0">Log</h2><span class="spacer"></span>
       <select class="input" id="h-nivel"><option value="">Todos los niveles</option>${["info", "warning", "error", "alerta"].map((n) => `<option ${n === nivel ? "selected" : ""}>${n}</option>`).join("")}</select>
-      <select class="input" id="h-motor"><option value="">Todos los motores</option>${cfg.motores.map((m) => `<option value="${m.id}" ${m.id === motor ? "selected" : ""}>${esc(m.nombre)}</option>`).join("")}</select></div>
+      <select class="input" id="h-motor"><option value="">Todos los motores</option>${cfg.motores.filter((m) => !m.oculto).map((m) => `<option value="${m.id}" ${m.id === motor ? "selected" : ""}>${esc(m.nombre)}</option>`).join("")}</select></div>
       <div class="tabla-wrap" style="max-height:520px;overflow:auto"><table><tbody>
       ${d.logs.map((l) => `<tr><td class="small muted" style="white-space:nowrap">${fecha(l.ts)}</td><td>${badge(l.level === "info" ? "listo" : l.level === "warning" ? "esperando" : "error", l.level)}</td>
         <td class="small">${esc(nm(l.engine))}</td><td class="small muted">${l.job_id ? "#" + l.job_id : ""}</td><td><pre class="log">${esc(l.message)}</pre></td></tr>`).join("")}
@@ -451,16 +457,129 @@ async function vistaHistorial() {
   $("#h-motor").onchange = filtrar;
 }
 
+// ================================================================= SHEETS (hoja local)
+async function vistaSheets() {
+  const { settings } = await api("/api/config");
+  const clientes = settings.clientes;
+  if (!clientes.length) { app.innerHTML = `<div class="vacio">No hay clientes. Agregalos en Configuración → Clientes.</div>`; return; }
+  if (!clientes.some((c) => c.id === S.sheetCliente)) S.sheetCliente = clientes[0].id;
+  const h = await api(`/api/sheet/${encodeURIComponent(S.sheetCliente)}`);
+  let n = h.slides;
+  const filas = h.filas.map((f) => ({ ...f, fecha: /^\d{4}-\d{2}-\d{2}$/.test(f.fecha) ? f.fecha : "" }));
+  const TOMAR = ["Estilo visual", "Estructura de slides", "Idea de contenido"];
+  let sucio = false;
+
+  const esImagen = (v) => /\.(png|jpe?g|webp)$/i.test(v || "");
+  const celdaImagen = (i, campo, val, vacio) => `<td class="celda-img">${val
+      ? (esImagen(val) ? `<a href="/api/sheet/${encodeURIComponent(h.cliente)}/imagen/${encodeURIComponent(val)}" target="_blank" title="${esc(val)}">
+          <img src="/api/sheet/${encodeURIComponent(h.cliente)}/imagen/${encodeURIComponent(val)}" alt=""></a>` : `<div class="small" title="${esc(val)}">${esc(val)}</div>`)
+      : `<div class="small muted">${vacio}</div>`}
+    <div class="row" style="gap:4px"><label class="btn sm">${val ? "Cambiar" : "Subir"}<input type="file" accept="image/png,image/jpeg,image/webp" hidden data-subir="${i}" data-c="${campo}"></label>
+    ${val ? `<button class="btn sm peligro" data-quitar-img="${i}" data-c="${campo}" title="Quitar">✕</button>` : ""}</div></td>`;
+  const celda = (i, campo, val, j) => `<td><textarea class="input celda" rows="2" data-f="${i}" data-c="${campo}"${j != null ? ` data-j="${j}"` : ""}>${esc(val)}</textarea></td>`;
+  const opcionesTomar = (actual) => ["", ...TOMAR, ...(actual && !TOMAR.includes(actual) ? [actual] : [])]
+    .map((o) => `<option value="${esc(o)}" ${o === (actual || "") ? "selected" : ""}>${esc(o || "—")}</option>`).join("");
+  const pie = () => `Pestaña “${esc(h.pestana)}” · ${filas.length} filas${sucio ? " · <b>cambios sin guardar</b>" : ""}`;
+
+  const render = () => {
+    app.innerHTML = `
+      <div class="topbar">
+        <div><h1>Sheets</h1><p>Planificación de contenido: una fila = un carrusel. Mismo formato que el Google Sheet.</p></div>
+        <div class="row"><button class="btn" id="sh-guardar">Guardar</button>
+          <button class="btn primario" id="sh-generar">↻ Guardar y generar</button></div>
+      </div>
+      ${h.fuente === "google" ? `<div class="alerta"><b>⚠</b><span>La fuente activa es Google Sheets: esta hoja no se usa al generar. Cambiala en Configuración → Claves.</span></div>` : ""}
+      <div class="tabs" style="display:inline-flex;margin-bottom:14px">${clientes.map((c) => `<button class="tab ${c.id === S.sheetCliente ? "activo" : ""}" data-sh-cliente="${esc(c.id)}">${esc(c.nombre)}</button>`).join("")}</div>
+      <div class="card"><div class="tabla-wrap"><table class="hoja"><thead><tr><th>#</th><th>Fecha</th><th>Plantilla</th><th>Referencia</th><th>Qué tomar de la referencia</th>
+        ${Array.from({ length: n }, (_, j) => `<th>Contenido Slide ${j + 1}</th>`).join("")}<th></th></tr></thead><tbody>
+        ${filas.length ? filas.map((f, i) => `<tr><td class="muted small">${i + 2}</td>
+          <td><input class="input" type="date" data-f="${i}" data-c="fecha" value="${esc(f.fecha)}"></td>
+          ${celdaImagen(i, "plantilla", f.plantilla, "La del cliente")}
+          ${celdaImagen(i, "referencia", f.referencia, "Sin referencia")}
+          <td><select class="input" data-f="${i}" data-c="que_tomar" ${f.referencia ? "" : 'disabled title="Primero subí una referencia"'}>${opcionesTomar(f.que_tomar)}</select></td>
+          ${Array.from({ length: n }, (_, j) => celda(i, "slides", f.slides[j] || "", j)).join("")}
+          <td><div class="row" style="gap:4px;flex-wrap:nowrap"><button class="btn sm primario" data-generar="${i}" title="Generar esta idea (también si ya se generó antes)">▶ Generar</button>
+            <button class="btn sm peligro" data-borrar="${i}" title="Borrar fila">✕</button></div></td></tr>`).join("")
+          : `<tr><td colspan="${n + 6}"><div class="vacio">Sin filas. Agregá la primera.</div></td></tr>`}
+      </tbody></table></div>
+      <div class="row mt"><button class="btn sm" id="sh-fila">+ Fila</button>
+        <button class="btn sm" id="sh-mas">+ Slide</button><button class="btn sm" id="sh-menos" ${n <= 1 ? "disabled" : ""}>− Slide</button>
+        <span class="spacer"></span><span class="small muted" id="sh-pie">${pie()}</span></div>
+      <p class="small muted">Solo se generan las filas con fecha y al menos un slide con texto. <b>Referencia</b>: imagen de inspiración (se toma lo que elijas en “Qué tomar”, nunca su texto). <b>Plantilla</b>: diseño base de ese carrusel; si no subís una, se usa la plantilla del cliente. Si editás una fila ya generada, se vuelve a encolar.</p></div>`;
+
+    $$("[data-subir]").forEach((inp) => (inp.onchange = async () => {
+      if (!inp.files.length) return;
+      const fd = new FormData(); fd.append("archivo", inp.files[0]);
+      try {
+        const r = await api(`/api/sheet/${encodeURIComponent(h.cliente)}/imagen`, { method: "POST", body: fd });
+        filas[Number(inp.dataset.subir)][inp.dataset.c] = r.nombre; sucio = true; render();
+      } catch (e) { toast(e.message, true); }
+    }));
+    $$("[data-quitar-img]").forEach((b) => (b.onclick = () => { filas[Number(b.dataset.quitarImg)][b.dataset.c] = ""; sucio = true; render(); }));
+    $$("[data-f]").forEach((el) => (el.oninput = el.onchange = () => {
+      const f = filas[Number(el.dataset.f)];
+      if (el.dataset.c === "slides") f.slides[Number(el.dataset.j)] = el.value; else f[el.dataset.c] = el.value;
+      if (!sucio) { sucio = true; $("#sh-pie").innerHTML = pie(); }
+    }));
+    $$("[data-generar]").forEach((b) => (b.onclick = async () => {
+      b.disabled = true;
+      try {
+        await guardar();
+        const x = await api(`/api/sheet/${encodeURIComponent(S.sheetCliente)}/generar`, { method: "POST", body: { fila: Number(b.dataset.generar) + 2 } });
+        const aviso = x.pausados.length ? " · El motor está pausado: tocá Sesión (o Reanudar) en el Dashboard" : "";
+        toast((x.encolados ? "Idea enviada a generar" : x.en_curso ? "Esa idea ya está en la cola" : "No hay motores encendidos") + aviso, !!aviso);
+        render();
+      } catch (e) { toast(e.message, true); b.disabled = false; }
+    }));
+    $$("[data-borrar]").forEach((b) => (b.onclick = () => { filas.splice(Number(b.dataset.borrar), 1); sucio = true; render(); }));
+    $("#sh-fila").onclick = () => {
+      filas.push({ fecha: new Date().toLocaleDateString("sv-SE"), slides: Array(n).fill(""), referencia: "", que_tomar: "", plantilla: "" });
+      sucio = true; render();
+      const t = $$("table.hoja tbody tr"); $("textarea", t[t.length - 1])?.focus();
+    };
+    $("#sh-mas").onclick = () => { n = Math.min(n + 1, 20); filas.forEach((f) => f.slides.push("")); sucio = true; render(); };
+    $("#sh-menos").onclick = async () => {
+      if (filas.some((f) => (f.slides[n - 1] || "").trim()) && !(await confirmar("Quitar slide", `Hay texto en “Contenido Slide ${n}”. Se va a borrar.`, "Quitar"))) return;
+      n -= 1; filas.forEach((f) => (f.slides.length = n)); sucio = true; render();
+    };
+    $$("[data-sh-cliente]").forEach((b) => (b.onclick = async () => {
+      if (sucio && !(await confirmar("Cambios sin guardar", "Si cambiás de cliente se pierden los cambios de esta pestaña.", "Descartar"))) return;
+      S.sheetCliente = b.dataset.shCliente; localStorage.setItem("sheetCliente", S.sheetCliente); vistaSheets();
+    }));
+    const guardar = async () => {
+      const r = await api(`/api/sheet/${encodeURIComponent(S.sheetCliente)}`, { method: "PUT", body: { slides: n, filas } });
+      sucio = false; return r;
+    };
+    $("#sh-guardar").onclick = async () => {
+      try { const r = await guardar(); toast(`Guardado · ${r.filas} filas`); render(); } catch (e) { toast(e.message, true); }
+    };
+    $("#sh-generar").onclick = async (e) => {
+      e.target.disabled = true;
+      try {
+        await guardar();
+        const x = await api("/api/sync", { method: "POST", body: { cliente: S.sheetCliente } });
+        toast(`${x.piezas} piezas leídas · ${x.encolados} trabajos encolados`); location.hash = "#/dashboard";
+      } catch (err) { toast(err.message, true); e.target.disabled = false; }
+    };
+  };
+  render();
+}
+
 // ================================================================= CONFIGURACIÓN
 async function vistaConfig() {
   const { settings: s, motores } = await api("/api/config");
   const sec = S.cfgSeccion;
-  const secciones = { claves: "Claves", clientes: "Clientes", simulacion: "Simulación", modelos: "Modelos", precios: "Precios", limites: "Límites", ritmo: "Ritmo humano", selectores: "Selectores web" };
+  const secciones = { visibles: "Motores visibles", claves: "Claves", clientes: "Clientes", simulacion: "Simulación", modelos: "Modelos", precios: "Precios", limites: "Límites", ritmo: "Ritmo humano", selectores: "Selectores web" };
   const campo = (label, path, val, type = "text", extra = "") => `<div class="campo"><label>${esc(label)}</label><input class="input" data-path="${path}" type="${type}" value="${esc(val ?? "")}" ${extra}></div>`;
   const rango = (label, path, v) => `<div class="campo"><label>${esc(label)}</label><div class="rango">
     <input class="input" type="number" step="any" data-path="${path}.0" value="${v[0]}"><span>a</span><input class="input" type="number" step="any" data-path="${path}.1" value="${v[1]}"></div></div>`;
   let cuerpo = "";
+  if (sec === "visibles") cuerpo = `<p class="muted">Los motores ocultos no aparecen en la app ni reciben trabajos. No se borran: su historial y sus archivos quedan guardados y se pueden volver a mostrar acá.</p>
+      <div class="form-grid">${motores.map((m) => `<label class="toggle-label" style="font-size:14px;color:var(--texto)"><span class="toggle"><input type="checkbox" data-visible="${m.id}" ${m.oculto ? "" : "checked"}><span></span></span>${esc(m.nombre)}</label>`).join("")}</div>`;
   if (sec === "claves") cuerpo = `<div class="form-grid">
+      <div class="campo"><label>Fuente de las piezas</label><select class="input" data-path="fuente_sheets">
+        <option value="local" ${s.fuente_sheets !== "google" ? "selected" : ""}>Sheet local de la app (pantalla Sheets)</option>
+        <option value="google" ${s.fuente_sheets === "google" ? "selected" : ""}>Google Sheets (cuenta de servicio)</option></select></div>
       ${campo("OpenAI API key", "claves.openai_api_key", s.claves.openai_api_key, "password", 'autocomplete="off"')}
       ${campo("Anthropic API key", "claves.anthropic_api_key", s.claves.anthropic_api_key, "password", 'autocomplete="off"')}
       ${campo("JSON de la cuenta de servicio (ruta)", "claves.google_service_account_json", s.claves.google_service_account_json)}
@@ -474,7 +593,7 @@ async function vistaConfig() {
       <button class="btn sm mt" id="agregar-cliente">+ Agregar cliente</button>
       <p class="small muted">Cada cliente usa /plantillas/{id}/ (brand.json, plantilla.html, plantilla.png) y /referencias/{id}/.</p>`;
   if (sec === "simulacion") cuerpo = `<p class="muted">Un motor simulado no llama a ninguna API ni abre el navegador: genera imágenes de prueba y costos ficticios para ver el flujo completo.</p>
-      <div class="form-grid">${motores.map((m) => `<label class="toggle-label" style="font-size:14px;color:var(--texto)"><span class="toggle"><input type="checkbox" data-path="simulacion.${m.id}" ${s.simulacion[m.id] ? "checked" : ""}><span></span></span>${esc(m.nombre)}</label>`).join("")}</div>
+      <div class="form-grid">${motores.filter((m) => !m.oculto).map((m) => `<label class="toggle-label" style="font-size:14px;color:var(--texto)"><span class="toggle"><input type="checkbox" data-path="simulacion.${m.id}" ${s.simulacion[m.id] ? "checked" : ""}><span></span></span>${esc(m.nombre)}</label>`).join("")}</div>
       <div class="form-grid mt">${campo("Escala de tiempo (0.01 = 100× más rápido)", "simulacion_escala_tiempo", s.simulacion_escala_tiempo, "number", 'step="any"')}
       ${campo("Tasa de error simulada (0 a 1)", "simulacion_tasa_error", s.simulacion_tasa_error, "number", 'step="any"')}</div>`;
   if (sec === "modelos") cuerpo = `<div class="form-grid">${Object.entries(s.modelos).map(([k, v]) => campo(k.replaceAll("_", " "), `modelos.${k}`, v)).join("")}</div>
@@ -502,7 +621,7 @@ async function vistaConfig() {
       ${rango("Pausa entre carruseles (min)", "ritmo_humano.pausa_entre_carruseles_min", r.pausa_entre_carruseles_min)}
       ${rango("Descanso cada N carruseles", "ritmo_humano.descanso_cada_n", r.descanso_cada_n)}
       ${rango("Duración del descanso (min)", "ritmo_humano.descanso_min", r.descanso_min)}
-      ${rango("Tope de carruseles por día", "ritmo_humano.tope_diario", r.tope_diario)}
+      ${rango("Tope de carruseles por día (0 = sin tope)", "ritmo_humano.tope_diario", r.tope_diario)}
       ${campo("Pausa ante captcha / límite (horas)", "ritmo_humano.pausa_bloqueo_horas", r.pausa_bloqueo_horas, "number")}
       ${campo("Franjas horarias (separadas por coma)", "ritmo_humano.franjas", r.franjas.join(", "))}</div>`; }
   if (sec === "selectores") cuerpo = `<div class="form-grid" style="margin-bottom:12px">${campo("Navegador (chrome, msedge o vacío = Chromium de Playwright)", "navegador_canal", s.navegador_canal)}</div>
@@ -539,6 +658,7 @@ async function vistaConfig() {
       });
     }
     if (sec === "selectores") n.selectores = JSON.parse($("#selectores").value);
+    if (sec === "visibles") n.motores_visibles = $$("[data-visible]").filter((el) => el.checked).map((el) => el.dataset.visible);
     return n;
   };
   $("#guardar").onclick = async () => {

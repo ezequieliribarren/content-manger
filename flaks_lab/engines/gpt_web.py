@@ -1,4 +1,4 @@
-"""Plugin desactivado · Scraping de ChatGPT web (chatgpt.com) con tu sesión y ritmo humano."""
+"""Scraping de ChatGPT web (chatgpt.com) con tu sesión y ritmo humano."""
 from __future__ import annotations
 
 from ..models import Pieza, Uso
@@ -13,7 +13,6 @@ class GptWeb(MotorNavegador):
     descripcion = "Automatiza chatgpt.com con tu sesión, con ritmo humano."
     proveedor = "openai"
     modelo_costo = "chatgpt-web"
-    activo_por_defecto = False
     orden = 7
 
     def uso_simulado(self, pieza: Pieza) -> list[Uso]:

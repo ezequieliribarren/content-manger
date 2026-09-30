@@ -24,6 +24,7 @@ class Pieza:
     fila: int = 0                # fila del Sheet (para trazabilidad)
     referencia: str = ""         # link de Drive o nombre de archivo en /referencias/{cliente}/
     que_tomar: str = ""          # estilo visual / estructura de slides / idea de contenido
+    plantilla: str = ""          # imagen de plantilla solo para esta fila (si no, la del cliente)
     id: str = ""
 
     def __post_init__(self) -> None:
@@ -33,13 +34,15 @@ class Pieza:
 
     @property
     def content_hash(self) -> str:
-        payload = json.dumps([self.slides, self.referencia, self.que_tomar], ensure_ascii=False)
+        datos = [self.slides, self.referencia, self.que_tomar] + ([self.plantilla] if self.plantilla else [])
+        payload = json.dumps(datos, ensure_ascii=False)
         return hashlib.sha1(payload.encode()).hexdigest()[:12]
 
     def to_dict(self) -> dict:
         return {
             "id": self.id, "cliente": self.cliente, "fecha": self.fecha, "fila": self.fila,
             "slides": self.slides, "referencia": self.referencia, "que_tomar": self.que_tomar,
+            "plantilla": self.plantilla,
         }
 
     @classmethod
@@ -48,7 +51,8 @@ class Pieza:
         if isinstance(slides, str):
             slides = json.loads(slides)
         return cls(cliente=row["client"], fecha=row["fecha"], slides=slides, fila=row.get("fila") or 0,
-                   referencia=row.get("referencia") or "", que_tomar=row.get("que_tomar") or "", id=row["id"])
+                   referencia=row.get("referencia") or "", que_tomar=row.get("que_tomar") or "",
+                   plantilla=row.get("plantilla") or "", id=row["id"])
 
 
 @dataclass

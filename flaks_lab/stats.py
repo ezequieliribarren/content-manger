@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import date
 
 from . import db
-from .engines.base import REGISTRO
+from .engines.base import REGISTRO, motor_visible
 
 
 def _filtro_cliente(cliente: str | None, alias: str = "") -> tuple[str, list]:
@@ -16,6 +16,7 @@ def _filtro_cliente(cliente: str | None, alias: str = "") -> tuple[str, list]:
 def ranking(cliente: str | None = None) -> list[dict]:
     f, params = _filtro_cliente(cliente)
     estados = {r["engine"]: r for r in db.query("SELECT * FROM engine_state")}
+    ajustes = db.get_settings()
     filas = []
     for motor_id, cls in REGISTRO.items():
         st = estados.get(motor_id, {})
@@ -47,6 +48,7 @@ def ranking(cliente: str | None = None) -> list[dict]:
             "encendido": bool(st.get("enabled")), "pausado": bool(st.get("paused")),
             "bloqueado_hasta": st.get("paused_until"), "motivo_pausa": st.get("pause_reason"),
             "eliminado": bool(st.get("deleted")),
+            "oculto": not motor_visible(ajustes, motor_id),
             "hoy": st.get("day_count") or 0, "tope_hoy": st.get("day_cap"),
             "generadas": listos, "errores": errores,
             "tasa_error": errores / (listos + errores) if (listos + errores) else 0.0,

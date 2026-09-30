@@ -7,3 +7,5 @@ referencias/*/_drive/
 credenciales/
 .env
 .pytest_cache/
+# imágenes subidas desde la pantalla Sheets (nombre-<hash>.ext): son de cada usuario
+referencias/*/*-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].*

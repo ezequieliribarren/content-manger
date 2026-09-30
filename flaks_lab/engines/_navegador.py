@@ -13,13 +13,16 @@ import base64
 import os
 import random
 import re
+import shutil
+import subprocess
 import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 from .. import config, formats, plantillas
 from ..models import Pieza, Resultado, Uso
-from .base import Contexto, Motor, MotorBloqueado, SesionRequerida
+from .base import Contexto, Interrumpido, Motor, MotorBloqueado, SesionRequerida
 from .gpt_imagen import prompt_slide
 
 FRASES_BLOQUEO = [
@@ -37,6 +40,32 @@ def _lock(motor_id: str) -> threading.Lock:
     return _locks.setdefault(motor_id, threading.Lock())
 
 
+_ventanas_login: dict[str, subprocess.Popen] = {}
+
+
+def cerrar_ventana_login(motor_id: str) -> bool:
+    """Cierra (como si tocaras la X) la ventana de Sesión del motor, si sigue abierta."""
+    proc = _ventanas_login.get(motor_id)
+    if not proc or proc.poll() is not None:
+        return False
+    if os.name == "nt":  # sin /F: Chrome cierra normal y guarda la sesión
+        subprocess.run(["taskkill", "/PID", str(proc.pid)], capture_output=True)
+    else:
+        proc.terminate()
+    return True
+
+
+def chrome_instalado() -> str | None:
+    """Ruta de Google Chrome en Windows, macOS o Linux (None si no está)."""
+    candidatos = [Path(os.environ.get(v, "")) / "Google/Chrome/Application/chrome.exe"
+                  for v in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA") if os.environ.get(v)]
+    candidatos.append(Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"))
+    for c in candidatos:
+        if c.is_file():
+            return str(c)
+    return shutil.which("google-chrome") or shutil.which("chrome")
+
+
 class MotorNavegador(Motor):
     tipo = "navegador"
     usa_referencia = "imagen"
@@ -44,7 +73,7 @@ class MotorNavegador(Motor):
     ritmo_humano = True
     proveedor = "web"
     modelo_costo = "web"        # nombre en la tabla de precios (0 por defecto: es tu suscripción)
-    timeout_respuesta_s = 240
+    timeout_respuesta_s = 360
 
     # ------------------------------------------------------------------ navegador
     def _selectores(self, settings: dict) -> dict:
@@ -68,7 +97,24 @@ class MotorNavegador(Motor):
         return p.chromium.launch_persistent_context(**kwargs)
 
     def abrir_para_login(self, settings: dict, espera_max_s: int = 900) -> None:
-        """Abre el navegador del motor para que inicies sesión a mano. Se cierra cuando cerrás la ventana."""
+        """Abre el navegador del motor para que inicies sesión a mano. Se cierra cuando cerrás la ventana.
+
+        Si está Google Chrome, lo abre como un Chrome normal (sin automatización) sobre el perfil del motor:
+        Google bloquea el login en navegadores automatizados ("este navegador no es seguro").
+        """
+        chrome = chrome_instalado() if (settings.get("navegador_canal") or "") == "chrome" else None
+        if chrome:
+            perfil = config.BROWSER_PROFILES_DIR / self.id
+            perfil.mkdir(parents=True, exist_ok=True)
+            with _lock(self.id):
+                proc = subprocess.Popen([chrome, f"--user-data-dir={perfil}", "--no-first-run",
+                                         "--no-default-browser-check", self._selectores(settings)["url"]])
+                _ventanas_login[self.id] = proc
+                try:
+                    proc.wait(timeout=espera_max_s)
+                except subprocess.TimeoutExpired:
+                    proc.terminate()
+            return
         from playwright.sync_api import sync_playwright
 
         with _lock(self.id), sync_playwright() as p:
@@ -181,18 +227,24 @@ class MotorNavegador(Motor):
     def esperar_imagen(self, page, antes: int, ctx: Contexto) -> object:
         sel = self._selectores(ctx.settings)["imagen_respuesta"]
         fin = time.monotonic() + self.timeout_respuesta_s
+        visto = None  # src de la última imagen completa: se acepta cuando no cambia entre dos chequeos
         while time.monotonic() < fin:
             self._chequear(page, ctx)
             imgs = page.locator(sel)
             if imgs.count() > antes:
                 ultima = imgs.nth(imgs.count() - 1)
                 try:
-                    ultima.wait_for(state="visible", timeout=5000)
+                    ultima.wait_for(state="attached", timeout=5000)
+                    src = ultima.get_attribute("src") or ""
                     if page.evaluate("(el) => el.complete && el.naturalWidth > 0", ultima.element_handle()):
-                        return ultima
+                        if src and src == visto:
+                            return ultima
+                        visto = src
+                    else:
+                        visto = None
                 except Exception:  # noqa: BLE001 - todavía cargando
-                    pass
-            ctx.dormir(2)
+                    visto = None
+            ctx.dormir(3)
         raise RuntimeError("El sitio no devolvió una imagen a tiempo")
 
     def descargar_imagen(self, page, img, dest: Path) -> None:
@@ -228,6 +280,37 @@ class MotorNavegador(Motor):
                 f"La primera imagen adjunta es la plantilla de marca: respetá sus colores, tipografías y estilo.{ref} "
                 "Te voy a pedir cada slide por separado; generá una sola imagen vertical 4:5 por pedido.")
 
+    def _guardar_diagnostico(self, page, ctx: Contexto) -> None:
+        """Ante un error guarda captura + HTML de la página y el último texto del asistente (para ajustar selectores)."""
+        try:
+            carpeta = config.DATA_DIR / "diagnostico" / self.id
+            carpeta.mkdir(parents=True, exist_ok=True)
+            base = carpeta / f"trabajo-{ctx.job_id}-{time.strftime('%Y%m%d-%H%M%S')}"
+            page.screenshot(path=str(base.with_suffix(".png")))
+            base.with_suffix(".html").write_text(page.content(), encoding="utf-8")
+            texto = ""
+            resp = self._selectores(ctx.settings).get("respuesta_lista")
+            if resp and page.locator(resp).count():
+                texto = page.locator(resp).last.inner_text(timeout=2000)[:600]
+            ctx.log(f"Diagnóstico guardado en {base.relative_to(config.ROOT)}.png/.html · URL {page.url}"
+                    + (f" · Última respuesta: “{texto.strip()}”" if texto.strip() else " · Sin respuesta de texto"),
+                    "warning")
+        except Exception as e:  # noqa: BLE001 - el diagnóstico nunca debe tapar el error original
+            ctx.log(f"No pude guardar el diagnóstico: {e}", "warning")
+
+    @contextmanager
+    def _perfil_libre(self, ctx: Contexto):
+        """El perfil no se puede abrir dos veces: si la ventana de Sesión sigue abierta, espera (y lo muestra)."""
+        lock = _lock(self.id)
+        if not lock.acquire(blocking=False):
+            ctx.paso("Esperando que cierres la ventana de Sesión")
+            while not lock.acquire(timeout=2):
+                ctx.chequear()
+        try:
+            yield
+        finally:
+            lock.release()
+
     def generar(self, pieza: Pieza, ctx: Contexto) -> Resultado:
         from playwright.sync_api import sync_playwright
 
@@ -235,8 +318,9 @@ class MotorNavegador(Motor):
         plantilla_img = plantillas.imagen_plantilla(ctx.plantilla, "4x5")
         sel = self._selectores(ctx.settings)
         paths: list[Path] = []
-        with _lock(self.id), sync_playwright() as p:
+        with self._perfil_libre(ctx), sync_playwright() as p:
             navegador = self._abrir_contexto(p, ctx.settings)
+            page = None
             try:
                 page = navegador.pages[0] if navegador.pages else navegador.new_page()
                 ctx.paso("Abriendo el sitio")
@@ -248,8 +332,9 @@ class MotorNavegador(Motor):
                     pass
                 self._chequear(page, ctx)
                 if not self._sesion_iniciada(page, ctx.settings):
-                    raise SesionRequerida(f"{self.nombre}: no hay sesión iniciada. Tocá “Sesión” en el dashboard, "
-                                          "iniciá sesión y reanudá el motor.")
+                    raise SesionRequerida(f"{self.nombre}: no hay sesión iniciada. Tocá “Sesión” en la tarjeta del "
+                                          "motor, iniciá sesión en esa ventana y cerrala (el motor sigue solo). "
+                                          "No inicies sesión en la ventana que abre el motor: Google la rechaza.")
                 n = len(pieza.slides)
                 for i, texto in enumerate(pieza.slides, 1):
                     ctx.paso(f"Slide {i}/{n}: escribiendo prompt")
@@ -271,6 +356,12 @@ class MotorNavegador(Motor):
                     if i < n:
                         ctx.paso(f"Pausa entre prompts ({i}/{n} listos)")
                         ctx.dormir_rango(ritmo["pausa_entre_prompts_s"])
+            except (SesionRequerida, Interrumpido):
+                raise
+            except Exception:
+                if page is not None:
+                    self._guardar_diagnostico(page, ctx)
+                raise
             finally:
                 try:
                     navegador.close()
